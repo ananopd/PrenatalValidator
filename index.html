@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>產檢資料批次上傳 - 格式檢核工具</title>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .error-msg { color: red; margin-bottom: 5px; }
+        .success-msg { color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>產檢批次資料格式檢核</h2>
+    <input type="file" id="uploadFile" accept=".xlsx, .xls">
+    <hr>
+    <div id="reportArea"></div>
+
+    <script>
+        document.getElementById('uploadFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        
+        // 假設資料都在第一個工作表 (Sheet)
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // 將 Sheet 轉為二維陣列，header: 1 代表保留原本的欄位順序
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+        
+        // 執行驗證
+        validateData(jsonData);
+    };
+    reader.readAsArrayBuffer(file);
+});
+
+function validateData(data) {
+    const reportArea = document.getElementById('reportArea');
+    reportArea.innerHTML = ''; // 清空上一次的報告
+    let errorLog = [];
+
+    // 從 index 1 開始 (跳過 index 0 的表頭)
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const rowNum = i + 1; // 實際在 Excel 裡面的列號 (含表頭)
+
+        // 避免讀到完全空白的列
+        if (!row || row.length === 0) continue; 
+
+        // 根據您提供的【欄位格式.csv】進行對應檢查
+        // 注意：陣列索引從 0 開始，所以「序號1:姓名」對應 row[0]
+        
+        const name = row[0] ? row[0].toString().trim() : '';
+        const idStr = row[1] ? row[1].toString().trim() : '';
+        const birthDate = row[2] ? row[2].toString().trim() : '';
+        const phone1 = row[3] ? row[3].toString().trim() : '';
+        const phone2 = row[4] ? row[4].toString().trim() : '';
+        const height = row[10] ? row[10].toString().trim() : '';
+        const checkCardSeq = row[13] ? row[13].toString().trim() : ''; // 本次檢查項目使用卡序
+
+        // --- 規則 1：必填欄位 ---
+        if (!name) errorLog.push(`第 ${rowNum} 列：【姓名】不可為空`);
+        if (!idStr) errorLog.push(`第 ${rowNum} 列：【身分證】不可為空`);
+        
+        // --- 規則 2：長度與格式 ---
+        if (idStr && idStr.length !== 10) {
+            errorLog.push(`第 ${rowNum} 列：【身分證】長度應為 10 碼 (目前填寫: ${idStr})`);
+        }
+        if (birthDate && !/^\d{7}$/.test(birthDate)) {
+            errorLog.push(`第 ${rowNum} 列：【出生日期】格式錯誤，必須為 7 碼數字 (YYYMMDD)`);
+        }
+
+        // --- 規則 3：條件必填 (擇一必填) ---
+        if (!phone1 && !phone2) {
+            errorLog.push(`第 ${rowNum} 列：【聯絡電話1】或【聯絡電話2】必須擇一填寫`);
+        }
+
+        // --- 規則 4：跨欄位邏輯相依 ---
+        // 規格：如序號14(卡序)為1，則序號12(身高)必填
+        if (checkCardSeq === '1' && !height) {
+            errorLog.push(`第 ${rowNum} 列：本次使用卡序為 1，則【身高】為必填項目`);
+        }
+    }
+
+    // 輸出報告畫面
+    if (errorLog.length === 0) {
+        reportArea.innerHTML = '<div class="success-msg">✅ 檔案格式檢核通過！沒有發現任何錯誤。</div>';
+    } else {
+        const errorHtml = errorLog.map(msg => `<div class="error-msg">❌ ${msg}</div>`).join('');
+        reportArea.innerHTML = `<h3>共發現 ${errorLog.length} 個錯誤：</h3>` + errorHtml;
+    }
+}
+    </script>
+</body>
+</html>
