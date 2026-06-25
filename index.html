@@ -11,7 +11,7 @@
     </style>
 </head>
 <body>
-    <h2>產檢批次資料格式檢核 V1.1</h2>
+    <h2>產檢批次資料格式檢核 V1.2</h2>
     <input type="file" id="uploadFile" accept=".xlsx, .xls">
     <hr>
     <div id="reportArea"></div>
@@ -40,123 +40,133 @@
 		});
 		
         function validateData(data, validTownCodes) {
-        const reportArea = document.getElementById('reportArea');
-        reportArea.innerHTML = '';
-        let errorLog = [];
-    
-        // 從 index 1 開始 (跳過 index 0 的表頭)
-        for (let i = 1; i < data.length; i++) {
-            const row = data[i];
-            const rowNum = i + 1; // 實際在 Excel 裡面的列號
-    
-            // 避免讀到完全空白的列 (檢查前兩個欄位是否有值)
-            if (!row || row.length === 0 || (!row[0] && !row[1])) continue; 
-    
-            // 輔助函式：安全地取得欄位值，去除前後空白，若無值則回傳空字串
-            const getVal = (index) => (row[index] !== undefined && row[index] !== null) ? row[index].toString().trim() : '';
-    
-            // 輔助函式：通用欄位檢查 (檢查必填與最大長度)
-            const checkField = (val, colName, maxLen, isRequired = false) => {
-                if (isRequired && !val) {
-                    errorLog.push(`第 ${rowNum} 列：【${colName}】為必填項目 (標記為 V)`);
-                }
-                if (val && val.length > maxLen) {
-                    errorLog.push(`第 ${rowNum} 列：【${colName}】長度不可超過 ${maxLen} (目前長度: ${val.length})`);
-                }
-            };
-    
-            // --- 取出所有需要互相參照的欄位值 (A~AF 對應 index 0~31) ---
-            const name        = getVal(0);   // A: 序號1 (姓名)
-            const idStr       = getVal(1);   // B: 序號2 (身分證)
-            const birthDate   = getVal(2);   // C: 序號3 (出生日期)
-            const phone1      = getVal(3);   // D: 序號4 (聯絡電話1)
-            const phone2      = getVal(4);   // E: 序號5 (聯絡電話2)
-            const townCode    = getVal(5);   // F: 序號6 (鄉鎮市區代碼)
-            const address     = getVal(6);   // G: 序號7 (居住地址)
-            const hospCode    = getVal(7);   // H: 序號8 (醫事機構代碼)
-            const checkDate   = getVal(8);   // I: 序號9 (檢查日期)
-            const pregWeeks   = getVal(9);   // J: 序號10 (孕期週數)
-            const height      = getVal(10);  // K: 序號11 (身高)
-            const weight      = getVal(11);  // L: 序號12 (體重)
-            const bmi         = getVal(12);  // M: 序號13 (BMI值)
-            const cardSeq     = getVal(13);  // N: 序號14 (本次檢查項目使用卡序)
-            // ... (依此類推宣告至 AF: 序號32)
-    
-            // ==========================================
-            // 依照《欄位格式.csv》規則逐一檢核
-            // ==========================================
-    
-            // 序號 1~3：姓名、身分證、出生日期
-            checkField(name, '姓名', 30, true);
-            
-            checkField(idStr, '身分證/統一證號', 10, true);
-            if (idStr && !/^[A-Z0-9]+$/.test(idStr)) {
-                errorLog.push(`第 ${rowNum} 列：【身分證】必須為大寫半型英數字元`);
-            }
-    
-            checkField(birthDate, '出生日期', 7, true);
-            if (birthDate && !/^\d{7}$/.test(birthDate)) {
-                errorLog.push(`第 ${rowNum} 列：【出生日期】格式錯誤，必須為 7 碼數字 (YYYMMDD)`);
-            }
-    
-            // 序號 4~5：聯絡電話1、2 (備註：擇一必填)
-            checkField(phone1, '聯絡電話1', 20, false);
-            checkField(phone2, '聯絡電話2', 20, false);
-            if (!phone1 && !phone2) {
-                errorLog.push(`第 ${rowNum} 列：【聯絡電話1】或【聯絡電話2】必須擇一填寫`);
-            }
-    
-            // 序號 6：鄉鎮市區代碼 (需比對代碼表)
-            checkField(townCode, '鄉鎮市區代碼', 4, true);
-            if (townCode && validTownCodes && !validTownCodes.includes(townCode)) {
-                errorLog.push(`第 ${rowNum} 列：【鄉鎮市區代碼】(${townCode}) 不存在於代碼表中`);
-            }
-    
-            // 序號 7~10：地址、院所代碼、檢查日期、孕期週數
-            checkField(address, '居住地址', 60, true);
-            checkField(hospCode, '產檢院所醫事機構代碼', 10, true);
-            
-            checkField(checkDate, '檢查日期', 7, true);
-            if (checkDate && !/^\d{7}$/.test(checkDate)) {
-                errorLog.push(`第 ${rowNum} 列：【檢查日期】格式錯誤，必須為 7 碼數字`);
-            }
-    
-            checkField(pregWeeks, '檢查時之孕期週數', 2, true);
-            if (pregWeeks && !/^\d{1,2}$/.test(pregWeeks)) {
-                errorLog.push(`第 ${rowNum} 列：【孕期週數】必須為整數`);
-            }
-    
-            // 序號 11：身高 (備註：如序號14為1，本欄必填)
-            // 這裡將 isRequired 設為動態條件 (cardSeq === '1')
-            checkField(height, '身高', 3, (cardSeq === '1'));
-            if (height && !/^\d{1,3}$/.test(height)) {
-                errorLog.push(`第 ${rowNum} 列：【身高】必須為公分整數`);
-            }
-    
-            // 序號 12：體重
-            checkField(weight, '體重', 3, true);
-            if (weight && !/^\d{1,3}$/.test(weight)) {
-                errorLog.push(`第 ${rowNum} 列：【體重】必須為公斤整數`);
-            }
-    
-            // 序號 13：BMI值 (備註：長度5，整數3位、小數1位)
-            checkField(bmi, 'BMI值', 5, false);
-            if (bmi && !/^\d{1,3}(\.\d{2})?$/.test(bmi)) {
-                errorLog.push(`第 ${rowNum} 列：【BMI值】格式錯誤，最多3位整數與1位小數`);
-            }
-    
-            // 序號 14：本次檢查項目使用卡序
-            // ... 開發者可依此結構繼續擴充至 序號32 (AF)
-        }
-    
-        // 輸出報告
-        if (errorLog.length === 0) {
-            reportArea.innerHTML = '<div class="success-msg">✅ 所有資料均符合規格要求！</div>';
-        } else {
-            const errorHtml = errorLog.map(msg => `<div class="error-msg">❌ ${msg}</div>`).join('');
-            reportArea.innerHTML = `<h3>共發現 ${errorLog.length} 個錯誤：</h3>` + errorHtml;
-        }
-    }
+			const reportArea = document.getElementById('reportArea');
+			reportArea.innerHTML = '';
+			let errorLog = [];
+
+			// 從 index 1 開始 (跳過 index 0 的表頭)
+			for (let i = 1; i < data.length; i++) {
+				const row = data[i];
+				const rowNum = i + 1; // 實際在 Excel 裡面的列號
+
+				// 避免讀到完全空白的列 (檢查前兩個欄位是否有值)
+				if (!row || row.length === 0 || (!row[0] && !row[1])) continue; 
+
+				// 輔助函式：安全地取得欄位值，去除前後空白，若無值則回傳空字串
+				const getVal = (index) => (row[index] !== undefined && row[index] !== null) ? row[index].toString().trim() : '';
+
+				// 輔助函式：通用欄位檢查 (檢查必填與最大長度)
+				const checkField = (val, colName, maxLen, isRequired = false) => {
+					if (isRequired && !val) {
+						// 更新：必填錯誤訊息
+						errorLog.push(`第 ${rowNum} 列：【${colName}】為必填項目`);
+					}
+					if (val && val.length > maxLen) {
+						// 更新：長度錯誤訊息，印出當下資料
+						errorLog.push(`第 ${rowNum} 列：【${colName}】資料為${val}，長度不可超過 ${maxLen}`);
+					}
+				};
+
+				// --- 取出所有需要互相參照的欄位值 (A~AF 對應 index 0~31) ---
+				const name        = getVal(0);   // A: 序號1 (姓名)
+				const idStr       = getVal(1);   // B: 序號2 (身分證)
+				const birthDate   = getVal(2);   // C: 序號3 (出生日期)
+				const phone1      = getVal(3);   // D: 序號4 (聯絡電話1)
+				const phone2      = getVal(4);   // E: 序號5 (聯絡電話2)
+				const townCode    = getVal(5);   // F: 序號6 (鄉鎮市區代碼)
+				const address     = getVal(6);   // G: 序號7 (居住地址)
+				const hospCode    = getVal(7);   // H: 序號8 (醫事機構代碼)
+				const checkDate   = getVal(8);   // I: 序號9 (檢查日期)
+				const pregWeeks   = getVal(9);   // J: 序號10 (孕期週數)
+				const height      = getVal(10);  // K: 序號11 (身高)
+				const weight      = getVal(11);  // L: 序號12 (體重)
+				const bmi         = getVal(12);  // M: 序號13 (BMI值)
+				const cardSeq     = getVal(13);  // N: 序號14 (本次檢查項目使用卡序)
+				// ... (依此類推宣告至 AF: 序號32)
+
+				// ==========================================
+				// 依照《欄位格式.csv》規則逐一檢核
+				// ==========================================
+
+				// 序號 1~3：姓名、身分證、出生日期
+				checkField(name, '姓名', 30, true);
+				
+				checkField(idStr, '身分證/統一證號', 10, true);
+				if (idStr && !/^[A-Z0-9]+$/.test(idStr)) {
+					// 更新：印出錯誤資料
+					errorLog.push(`第 ${rowNum} 列：【身分證/統一證號】資料為${idStr}，必須為大寫半型英數字元`);
+				}
+
+				checkField(birthDate, '出生日期', 7, true);
+				if (birthDate && !/^\d{7}$/.test(birthDate)) {
+					// 更新：印出錯誤資料
+					errorLog.push(`第 ${rowNum} 列：【出生日期】資料為${birthDate}，格式錯誤，必須為 7 碼數字 (YYYMMDD)`);
+				}
+
+				// 序號 4~5：聯絡電話1、2 (備註：擇一必填)
+				checkField(phone1, '聯絡電話1', 20, false);
+				checkField(phone2, '聯絡電話2', 20, false);
+				if (!phone1 && !phone2) {
+					// 這裡因為兩個都沒填，所以維持原樣提示
+					errorLog.push(`第 ${rowNum} 列：【聯絡電話1】或【聯絡電話2】必須擇一填寫`);
+				}
+
+				// 序號 6：鄉鎮市區代碼 (需比對代碼表)
+				checkField(townCode, '鄉鎮市區代碼', 4, true);
+				if (townCode && validTownCodes && !validTownCodes.includes(townCode)) {
+					// 更新：印出錯誤資料
+					errorLog.push(`第 ${rowNum} 列：【鄉鎮市區代碼】資料為${townCode}，不存在於代碼表中`);
+				}
+
+				// 序號 7~10：地址、院所代碼、檢查日期、孕期週數
+				checkField(address, '居住地址', 60, true);
+				checkField(hospCode, '產檢院所醫事機構代碼', 10, true);
+				
+				checkField(checkDate, '檢查日期', 7, true);
+				if (checkDate && !/^\d{7}$/.test(checkDate)) {
+					// 更新：印出錯誤資料
+					errorLog.push(`第 ${rowNum} 列：【檢查日期】資料為${checkDate}，格式錯誤，必須為 7 碼數字`);
+				}
+
+				checkField(pregWeeks, '檢查時之孕期週數', 2, true);
+				if (pregWeeks && !/^\d{1,2}$/.test(pregWeeks)) {
+					// 更新：印出錯誤資料
+					errorLog.push(`第 ${rowNum} 列：【孕期週數】資料為${pregWeeks}，必須為整數`);
+				}
+
+				// 序號 11：身高 (備註：如序號14為1，本欄必填)
+				checkField(height, '身高', 3, (cardSeq === '1'));
+				if (height && !/^\d{1,3}$/.test(height)) {
+					// 更新：印出錯誤資料 (依您提供的範例)
+					errorLog.push(`第 ${rowNum} 列：【身高】資料為${height}，必須為公分整數`);
+				}
+
+				// 序號 12：體重
+				checkField(weight, '體重', 3, true);
+				if (weight && !/^\d{1,3}$/.test(weight)) {
+					// 更新：印出錯誤資料 (依您提供的範例)
+					errorLog.push(`第 ${rowNum} 列：【體重】資料為${weight}，必須為公斤整數`);
+				}
+
+				// 序號 13：BMI值 (備註：長度5，整數3位、小數1位)
+				checkField(bmi, 'BMI值', 5, false);
+				if (bmi && !/^\d{1,3}(\.\d{2})?$/.test(bmi)) {
+					// 更新：印出錯誤資料
+					errorLog.push(`第 ${rowNum} 列：【BMI值】資料為${bmi}，格式錯誤，最多3位整數與1位小數`);
+				}
+
+				// 序號 14：本次檢查項目使用卡序
+				// ... 後續欄位請依此模式擴充
+			}
+
+			// 輸出報告
+			if (errorLog.length === 0) {
+				reportArea.innerHTML = '<div class="success-msg">✅ 所有資料均符合規格要求！</div>';
+			} else {
+				const errorHtml = errorLog.map(msg => `<div class="error-msg">❌ ${msg}</div>`).join('');
+				reportArea.innerHTML = `<h3>共發現 ${errorLog.length} 個錯誤：</h3>` + errorHtml;
+			}
+		}
     </script>
 </body>
 </html>
